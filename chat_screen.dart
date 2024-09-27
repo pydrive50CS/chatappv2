@@ -41,12 +41,15 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Timer? _debounceTimer;
   late WSManager _wsManager;
   final AudioRecorderManager _audioRecorderManager = AudioRecorderManager();
+  ValueNotifier<int> unreadMessageCount = ValueNotifier<int>(0);
+  bool _showScrollToBottomButton = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _audioRecorderManager.initialize();
+    _scrollController.addListener(_handleScroll);
     _wsManager = WSManager(
       userId: widget.userId,
       otherUserId: widget.otherUserId,
@@ -65,7 +68,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached || state == AppLifecycleState.inactive) {
-      // _wsManager.closeConnection();
+// _wsManager.closeConnection();
     }
   }
 
@@ -74,7 +77,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _wsManager.closeConnection();
     _audioRecorderManager.dispose();
     _messageInputCtrl.dispose();
-    _scrollController.dispose();
+    _scrollController.removeListener(_handleScroll);
     _debounceTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     for (var controller in audioControllers) {
@@ -83,9 +86,40 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  void _handleScroll() {
+// If the user scrolls up, show the down arrow button
+    if (_scrollController.offset < _scrollController.position.maxScrollExtent - 300) {
+      if (!_showScrollToBottomButton) {
+        setState(() {
+          _showScrollToBottomButton = true;
+        });
+      }
+    } else {
+      if (_showScrollToBottomButton) {
+        setState(() {
+          _showScrollToBottomButton = false;
+          unreadMessageCount.value = 0; // Reset unread message count when user is at the bottom
+        });
+      }
+    }
+  }
+
+  void _scrollToBottom() {
+    _scrollController.animateTo(
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+    setState(() {
+      _showScrollToBottomButton = false;
+      unreadMessageCount.value = 0;
+      _scrollController.position.maxScrollExtent;
+    });
+  }
+
   void _onMessageReceived(String id, String sender, String message, String type) {
     setState(() {
-      // Update status if the message was sent by the current user
+// Update status if the message was sent by the current user
       if (sender == widget.userId) {
         final index = _messages.indexWhere((msg) => msg.id == id);
         if (index != -1) {
@@ -99,6 +133,13 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           type: type,
         ));
         _typingUserId = null;
+      }
+// If the user is near the bottom (e.g., within 100 pixels), scroll to the bottom
+      if (_scrollController.offset >= _scrollController.position.maxScrollExtent - 100) {
+        _scrollToBottom();
+      } else if (sender != widget.userId && _scrollController.offset < _scrollController.position.maxScrollExtent - 100) {
+        // If the user is not at the bottom, increment unread messages
+        unreadMessageCount.value += 1;
       }
     });
   }
@@ -159,7 +200,6 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _sendTypingIndicator(bool isTyping) {
     log(isTyping ? "User is typing..." : "User stopped typing...");
-    // Send WebSocket message here
     isTyping ? _wsManager.sendTypingIndicator() : _wsManager.sendNotTypingIndicator();
   }
 
@@ -175,10 +215,6 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _sendMessage(type, audioBytes);
       return;
     }
-    //for video
-    // else if (type == 'video') {
-    //       file = await picker.pickVideo(source: ImageSource.gallery);
-    //     }
     if (file != null) {
       final bytes = await file.readAsBytes();
       final base64String = base64Encode(bytes);
@@ -221,17 +257,17 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _onTextChanged(String text) {
-    // Cancel previous timer if it's active
+// Cancel previous timer if it's active
     _debounceTimer?.cancel();
 
     if (text.isEmpty) {
-      // If text field is empty, send stopped typing event
+// If text field is empty, send stopped typing event
       _sendTypingIndicator(false);
       setState(() {
         _isTextMessageComposing = false;
       });
     } else {
-      // Start the timer to detect stopped typing after 2 seconds
+// Start the timer to detect stopped typing after 2 seconds
       _sendTypingIndicator(true);
       _debounceTimer = Timer(const Duration(seconds: 2), () {
         _sendTypingIndicator(false);
@@ -290,98 +326,141 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ],
         ),
       ),
-      body: Column(
-        children: <Widget>[
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.all(8),
-              itemCount: _messages.length,
-              itemBuilder: (BuildContext context, int index) {
-                final audioController = PlayerController();
-                audioControllers.add(audioController);
-                return MessageWidget(
-                  message: _messages[index],
-                  currentUserId: widget.userId,
-                  audioController: audioControllers[index],
-                );
-              },
-            ),
-          ),
-          //typing indicator
-          if (_typingUserId != null)
-            Padding(
-              padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '$_typingUserId is typing...',
-                  style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.blue),
+      body: Stack(
+        children: [
+          Column(
+            children: <Widget>[
+              Expanded(
+                child: ListView.builder(
+                  // reverse: true,
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _messages.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    // int actualIndex = _messages.length - index - 1;
+                    final audioController = PlayerController();
+                    audioControllers.add(audioController);
+                    return MessageWidget(
+                      message: _messages[index],
+                      currentUserId: widget.userId,
+                      audioController: audioControllers[index],
+                    );
+                  },
                 ),
               ),
-            ),
-          //send buttons
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Container(
-              margin: const EdgeInsets.all(8),
-              padding: const EdgeInsets.only(left: 10, bottom: 5, top: 5, right: 10),
-              width: double.infinity,
-              decoration: BoxDecoration(color: Colors.blue, borderRadius: const BorderRadius.all(Radius.circular(48)), border: Border.all(width: 1)),
-              child: Row(
-                children: <Widget>[
-                  _isRecording
-                      ? _audioRecorderManager.buildWaveform(context)
-                      : Expanded(
-                          child: TextField(
-                            controller: _messageInputCtrl,
-                            decoration: const InputDecoration(
-                              hintText: 'Write message...',
-                              border: InputBorder.none,
+              //typing indicator
+              if (_typingUserId != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0, bottom: 8.0),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '$_typingUserId is typing...',
+                      style: const TextStyle(fontStyle: FontStyle.italic, color: Colors.blue),
+                    ),
+                  ),
+                ),
+              //send buttons
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Container(
+                  margin: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.only(left: 10, bottom: 5, top: 5, right: 10),
+                  width: double.infinity,
+                  decoration: BoxDecoration(color: Colors.blue, borderRadius: const BorderRadius.all(Radius.circular(48)), border: Border.all(width: 1)),
+                  child: Row(
+                    children: <Widget>[
+                      _isRecording
+                          ? _audioRecorderManager.buildWaveform(context)
+                          : Expanded(
+                              child: TextField(
+                                controller: _messageInputCtrl,
+                                decoration: const InputDecoration(
+                                  hintText: 'Write message...',
+                                  border: InputBorder.none,
+                                ),
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.newline,
+                                onChanged: _onTextChanged,
+                              ),
                             ),
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.newline,
-                            onChanged: _onTextChanged,
+                      const SizedBox(width: 5),
+                      _isTextMessageComposing
+                          ? const SizedBox()
+                          : FloatingActionButton.small(
+                              onPressed: () => _sendMedia('image'),
+                              elevation: 0,
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                      const SizedBox(width: 5),
+                      !_isTextMessageComposing
+                          ? const SizedBox()
+                          : FloatingActionButton.small(
+                              onPressed: () => _sendMedia('text'),
+                              elevation: 0,
+                              child: const Icon(
+                                Icons.send,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                      _isTextMessageComposing
+                          ? const SizedBox()
+                          : IconButton(
+                              onPressed: _startOrStopRecording,
+                              icon: Icon(
+                                _isRecording ? Icons.stop : Icons.mic,
+                              ),
+                              color: Colors.black,
+                              iconSize: 28,
+                            ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          // Down arrow button with unread message count notifier
+          if (_showScrollToBottomButton)
+            Positioned(
+              bottom: 80,
+              right: 16,
+              child: ValueListenableBuilder<int>(
+                valueListenable: unreadMessageCount,
+                builder: (context, count, child) {
+                  return Stack(
+                    children: [
+                      FloatingActionButton(
+                        shape: const CircleBorder(),
+                        onPressed: _scrollToBottom,
+                        backgroundColor: Colors.blue,
+                        child: const Icon(Icons.arrow_downward),
+                      ),
+                      if (count > 0)
+                        Positioned(
+                          right: 10,
+                          top: 10,
+                          child: CircleAvatar(
+                            radius: 5,
+                            backgroundColor: Colors.red,
+                            child: Text(
+                              '$count',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 5,
+                              ),
+                            ),
                           ),
                         ),
-                  const SizedBox(width: 5),
-                  _isTextMessageComposing
-                      ? const SizedBox()
-                      : FloatingActionButton.small(
-                          onPressed: () => _sendMedia('image'),
-                          elevation: 0,
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                  const SizedBox(width: 5),
-                  !_isTextMessageComposing
-                      ? const SizedBox()
-                      : FloatingActionButton.small(
-                          onPressed: () => _sendMedia('text'),
-                          elevation: 0,
-                          child: const Icon(
-                            Icons.send,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                  _isTextMessageComposing
-                      ? const SizedBox()
-                      : IconButton(
-                          onPressed: _startOrStopRecording,
-                          icon: Icon(
-                            _isRecording ? Icons.stop : Icons.mic,
-                          ),
-                          color: Colors.black,
-                          iconSize: 28,
-                        ),
-                ],
+                    ],
+                  );
+                },
               ),
             ),
-          ),
         ],
       ),
     );
