@@ -75,6 +75,7 @@ wss.on("connection", (ws) => {
     else if (data.type === "message") {
       const messageData = {
         type: "message",
+        id: data.id,
         sender: data.sender,
         text: data.text,
         roomId: roomId,

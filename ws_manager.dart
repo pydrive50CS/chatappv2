@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class WSManager {
@@ -13,7 +15,7 @@ class WSManager {
   final int _maxReconnectAttempts = 5;
   int _reconnectAttempts = 0;
   Function? onMaxReconnectReached;
-
+  static final Map<String, String> _imageCache = {};
   WSManager({required String userId, required String otherUserId, required String roomId}) {
     _userId = userId;
     _otherUserId = otherUserId;
@@ -42,13 +44,20 @@ class WSManager {
 
     _channel.sink.add(json.encode({'type': 'ping', 'sender': _userId}));
 
-    _channel.stream.listen((message) {
+    _channel.stream.listen((message) async {
       final data = json.decode(message);
       log('Received message: $message');
 
       if (data['type'] == 'message' && data['roomId'] == _roomId) {
-        log('${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
-        onMessageReceived(data['sender'], data['text'], data['messageType']);
+        if (data['messageType'] == 'image' && _userId != data['sender']) {
+          log('${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
+          String imageFilePath = await _getImageFilePath(data['text']);
+          log(imageFilePath);
+          onMessageReceived(data['id'], data['sender'], imageFilePath, data['messageType']);
+        } else {
+          log('${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
+          onMessageReceived(data['id'], data['sender'], data['text'], data['messageType']);
+        }
       } else if (data['type'] == 'typing' && data['roomId'] == _roomId) {
         onTyping(data['sender']);
       } else if (data['type'] == 'stopped_typing' && data['roomId'] == _roomId) {
@@ -106,10 +115,11 @@ class WSManager {
     }
   }
 
-  void sendMessage(String type, String message) {
+  void sendMessage(String type, String id, String message) {
     if (_isConnected && message.isNotEmpty) {
       _channel.sink.add(json.encode({
         'type': 'message',
+        'id': id,
         'sender': _userId,
         'text': message,
         'roomId': _roomId,
@@ -135,6 +145,33 @@ class WSManager {
         'sender': _userId,
         'roomId': _roomId,
       }));
+    }
+  }
+
+  Future<String> _getImageFilePath(String base64Image) async {
+    // Check if image is already cached
+    if (_imageCache.containsKey(base64Image)) {
+      return _imageCache[base64Image]!;
+    }
+
+    // Save image to the temp directory and cache the path
+    final filePath = await saveImageToTempDirectory(base64Image);
+    _imageCache[base64Image] = filePath;
+
+    return filePath;
+  }
+
+  Future<String> saveImageToTempDirectory(String base64Image) async {
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final filePath = '${tempDir.path}/image_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File(filePath);
+      await file.writeAsBytes(base64Decode(base64Image));
+      log('Image saved to: $filePath');
+      return filePath;
+    } catch (e) {
+      log('Error saving image: $e');
+      throw Exception('Failed to save image');
     }
   }
 

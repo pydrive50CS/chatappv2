@@ -83,12 +83,24 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  void _onMessageReceived(String sender, String message, String type) {
+  void _onMessageReceived(String id, String sender, String message, String type) {
     setState(() {
-      _messages.add(ChatMessage(sender: sender, content: message, type: type));
-      _typingUserId = null;
+      // Update status if the message was sent by the current user
+      if (sender == widget.userId) {
+        final index = _messages.indexWhere((msg) => msg.id == id);
+        if (index != -1) {
+          _messages[index].status = 'sent'; // Update to sent
+        }
+      } else {
+        _messages.add(ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          sender: sender,
+          content: message,
+          type: type,
+        ));
+        _typingUserId = null;
+      }
     });
-    _scrollToBottom();
   }
 
   void _onTypingIndicator(String sender) {
@@ -116,15 +128,33 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _sendMessage() {
-    if (_messageInputCtrl.text.isNotEmpty) {
-      _wsManager.sendMessage('text', _messageInputCtrl.text);
-      _messageInputCtrl.clear();
-      _scrollToBottom();
-      setState(() {
-        _isTextMessageComposing = false;
-      });
+  void _sendMessage(String type, String content) async {
+    final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+    ChatMessage newMessage;
+    if (type == 'image') {
+      final path = await _wsManager.saveImageToTempDirectory(content);
+      newMessage = ChatMessage(
+        id: messageId,
+        sender: widget.userId,
+        content: path,
+        type: type,
+        status: 'sending',
+      );
+    } else {
+      newMessage = ChatMessage(
+        id: messageId,
+        sender: widget.userId,
+        content: content,
+        type: type,
+        status: 'sending',
+      );
     }
+    setState(() {
+      _messages.add(newMessage);
+      _isTextMessageComposing = false;
+    });
+    log('$type,$content');
+    _wsManager.sendMessage(type, messageId, content);
   }
 
   void _sendTypingIndicator(bool isTyping) {
@@ -136,22 +166,23 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _sendMedia(String type, {String? audioBytes}) async {
     final picker = ImagePicker();
     XFile? file;
-
-    if (type == 'image') {
+    if (type == 'text') {
+      _sendMessage(type, _messageInputCtrl.text);
+      _messageInputCtrl.clear();
+    } else if (type == 'image') {
       file = await picker.pickImage(source: ImageSource.camera, preferredCameraDevice: CameraDevice.front, imageQuality: 50);
-    } else if (type == 'video') {
-      file = await picker.pickVideo(source: ImageSource.gallery);
     } else if (type == 'audio' && audioBytes != null) {
-      _wsManager.sendMessage(type, audioBytes);
-      _scrollToBottom();
+      _sendMessage(type, audioBytes);
       return;
     }
-
+    //for video
+    // else if (type == 'video') {
+    //       file = await picker.pickVideo(source: ImageSource.gallery);
+    //     }
     if (file != null) {
       final bytes = await file.readAsBytes();
       final base64String = base64Encode(bytes);
-      _wsManager.sendMessage(type, base64String);
-      _scrollToBottom();
+      _sendMessage(type, base64String);
     }
   }
 
@@ -211,16 +242,6 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 100), () {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    });
-  }
-
   void _startOrStopRecording() async {
     if (_isRecording) {
       // Stop recording and get the recorded data
@@ -277,34 +298,13 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.all(8),
               itemCount: _messages.length,
               itemBuilder: (BuildContext context, int index) {
-                // if (_messages[index].content == 'audio') {
                 final audioController = PlayerController();
                 audioControllers.add(audioController);
-                // }
                 return MessageWidget(
                   message: _messages[index],
                   currentUserId: widget.userId,
                   audioController: audioControllers[index],
                 );
-                // final bool isSentByMe = _messages[index]['sender'] == widget.userId; // Dynamic check
-
-                // return Align(
-                //   alignment: isSentByMe ? Alignment.centerRight : Alignment.centerLeft,
-                //   child: Container(
-                //     padding: const EdgeInsets.all(12),
-                //     margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                //     decoration: BoxDecoration(
-                //       color: isSentByMe ? Colors.blueAccent : Colors.grey[300],
-                //       borderRadius: BorderRadius.circular(12),
-                //     ),
-                //     child: Text(
-                //       _messages[index]['text']!,
-                //       style: TextStyle(
-                //         color: isSentByMe ? Colors.white : Colors.black,
-                //       ),
-                //     ),
-                //   ),
-                // );
               },
             ),
           ),
@@ -357,31 +357,10 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           ),
                         ),
                   const SizedBox(width: 5),
-
-                  // RecordButton(onStartRecording: () {
-                  //     setState(() {
-                  //       _isVoiceRecording = true;
-                  //       _isTextMessageComposing = false;
-                  //     });
-                  //   }, onSendRecording: (audioFile) {
-                  //     setState(() {
-                  //       _isVoiceRecording = false;
-                  //       _isTextMessageComposing = false;
-                  //     });
-                  //     Uint8List audioBytes = audioFile.readAsBytesSync();
-                  //     final stringBytes = String.fromCharCodes(audioBytes);
-                  //     _wsManager.sendMessage('audio', stringBytes);
-                  //     // initState();
-                  //   }, onCancelRecording: () {
-                  //     setState(() {
-                  //       _isVoiceRecording = false;
-                  //       _isTextMessageComposing = false;
-                  //     });
-                  //   }),
                   !_isTextMessageComposing
                       ? const SizedBox()
                       : FloatingActionButton.small(
-                          onPressed: () => _sendMessage(),
+                          onPressed: () => _sendMedia('text'),
                           elevation: 0,
                           child: const Icon(
                             Icons.send,
