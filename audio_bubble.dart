@@ -51,6 +51,7 @@ class _WaveBubbleState extends State<WaveBubble> {
       await controller.preparePlayer(
         path: tempAudioFilePath!,
         shouldExtractWaveform: true,
+        noOfSamples = 30,
       );
     } catch (e) {
       debugPrint('Error saving audio file: $e');
