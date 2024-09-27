@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:web_socket/models/chat_model.dart';
@@ -27,6 +28,7 @@ class ChatScreen extends StatefulWidget {
 }
 
 class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
+  final List<PlayerController> audioControllers = [];
   final TextEditingController _messageInputCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
@@ -75,6 +77,9 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _scrollController.dispose();
     _debounceTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    for (var controller in audioControllers) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -145,7 +150,6 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (file != null) {
       final bytes = await file.readAsBytes();
       final base64String = base64Encode(bytes);
-
       _wsManager.sendMessage(type, base64String);
       _scrollToBottom();
     }
@@ -273,9 +277,14 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               padding: const EdgeInsets.all(8),
               itemCount: _messages.length,
               itemBuilder: (BuildContext context, int index) {
+                // if (_messages[index].content == 'audio') {
+                final audioController = PlayerController();
+                audioControllers.add(audioController);
+                // }
                 return MessageWidget(
                   message: _messages[index],
                   currentUserId: widget.userId,
+                  audioController: audioControllers[index],
                 );
                 // final bool isSentByMe = _messages[index]['sender'] == widget.userId; // Dynamic check
 

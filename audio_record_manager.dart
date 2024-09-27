@@ -10,7 +10,7 @@ class AudioRecorderManager {
     ..androidEncoder = AndroidEncoder.aac
     ..androidOutputFormat = AndroidOutputFormat.mpeg4
     ..iosEncoder = IosEncoder.kAudioFormatMPEG4AAC
-    ..sampleRate = 44100;
+    ..sampleRate = 44000;
 
   String? path;
   late Directory appDirectory;
