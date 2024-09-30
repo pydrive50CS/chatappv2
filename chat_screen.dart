@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:web_socket/models/chat_model.dart';
 import 'package:web_socket/services/audio_record_manager.dart';
+import 'package:web_socket/widgets/audio_bubble.dart';
 import 'package:web_socket/widgets/message_widget.dart';
 import 'package:web_socket/ws_manager.dart';
 import 'dart:developer';
@@ -43,6 +44,9 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final AudioRecorderManager _audioRecorderManager = AudioRecorderManager();
   ValueNotifier<int> unreadMessageCount = ValueNotifier<int>(0);
   bool _showScrollToBottomButton = false;
+  Timer? _recordingTimer;
+  Duration maxRecordDuration = const Duration(seconds: 60);
+  Duration _elapsedTime = Duration.zero;
 
   @override
   void initState() {
@@ -68,7 +72,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached || state == AppLifecycleState.inactive) {
-// _wsManager.closeConnection();
+      // _wsManager.closeConnection();
     }
   }
 
@@ -87,7 +91,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _handleScroll() {
-// If the user scrolls up, show the down arrow button
+    // If the user scrolls up, show the down arrow button
     if (_scrollController.offset < _scrollController.position.maxScrollExtent - 300) {
       if (!_showScrollToBottomButton) {
         setState(() {
@@ -98,7 +102,8 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (_showScrollToBottomButton) {
         setState(() {
           _showScrollToBottomButton = false;
-          unreadMessageCount.value = 0; // Reset unread message count when user is at the bottom
+          // Reset unread message count when user is at the bottom
+          unreadMessageCount.value = 0;
         });
       }
     }
@@ -117,13 +122,14 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _onMessageReceived(String id, String sender, String message, String type) {
+  void _onMessageReceived(String id, String sender, String message, String type, String timeStamp) {
     setState(() {
-// Update status if the message was sent by the current user
+      // Update status if the message was sent by the current user
       if (sender == widget.userId) {
         final index = _messages.indexWhere((msg) => msg.id == id);
         if (index != -1) {
-          _messages[index].status = 'sent'; // Update to sent
+          _messages[index].status = 'sent';
+          _messages[index].timeStamp = timeStamp;
         }
       } else {
         _messages.add(ChatMessage(
@@ -131,10 +137,11 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           sender: sender,
           content: message,
           type: type,
+          timeStamp: timeStamp,
         ));
         _typingUserId = null;
       }
-// If the user is near the bottom (e.g., within 100 pixels), scroll to the bottom
+      // If the user is near the bottom (e.g., within 100 pixels), scroll to the bottom
       if (_scrollController.offset >= _scrollController.position.maxScrollExtent - 100) {
         _scrollToBottom();
       } else if (sender != widget.userId && _scrollController.offset < _scrollController.position.maxScrollExtent - 100) {
@@ -257,17 +264,17 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _onTextChanged(String text) {
-// Cancel previous timer if it's active
+    // Cancel previous timer if it's active
     _debounceTimer?.cancel();
 
     if (text.isEmpty) {
-// If text field is empty, send stopped typing event
+      // If text field is empty, send stopped typing event
       _sendTypingIndicator(false);
       setState(() {
         _isTextMessageComposing = false;
       });
     } else {
-// Start the timer to detect stopped typing after 2 seconds
+      // Start the timer to detect stopped typing after 2 seconds
       _sendTypingIndicator(true);
       _debounceTimer = Timer(const Duration(seconds: 2), () {
         _sendTypingIndicator(false);
@@ -282,20 +289,105 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (_isRecording) {
       // Stop recording and get the recorded data
       final result = await _audioRecorderManager.stopRecording();
+      _stopRecordingTimer();
       if (result != null) {
         setState(() {
           recordedStringBytes = result;
         });
-        _sendMedia('audio', audioBytes: recordedStringBytes);
+        _showAudioOptionsDialog(recordedStringBytes);
+        // _sendMedia('audio', audioBytes: recordedStringBytes);
       }
     } else {
       // Start recording
       await _audioRecorderManager.startRecording();
+      _startRecordingTimer();
     }
 
     setState(() {
       _isRecording = !_isRecording;
     });
+  }
+
+// Start a timer for 60 seconds and update the elapsed time
+  void _startRecordingTimer() {
+    _elapsedTime = Duration.zero; // Reset elapsed time
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _elapsedTime = Duration(seconds: _elapsedTime.inSeconds + 1);
+      });
+
+      // Stop recording when max duration is reached
+      if (_elapsedTime >= maxRecordDuration) {
+        _startOrStopRecording();
+      }
+    });
+  }
+
+// Stop the timer when recording ends
+  void _stopRecordingTimer() {
+    if (_recordingTimer != null) {
+      _recordingTimer!.cancel();
+      _recordingTimer = null;
+    }
+    setState(() {
+      _elapsedTime = Duration.zero; // Reset elapsed time
+    });
+  }
+
+// Show a dialog to send or delete audio
+  void _showAudioOptionsDialog(String? audioBytes) {
+    final audioController = PlayerController();
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Audio recorded',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              WaveBubble(audioBytes: audioBytes ?? '', audioController: audioController),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      audioController.dispose();
+                      _sendMedia('audio', audioBytes: recordedStringBytes);
+                      Navigator.pop(context); // Close the dialog
+                    },
+                    icon: const Icon(Icons.send),
+                    label: const Text('Send'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        recordedStringBytes = null; // Clear recorded audio
+                      });
+                      Navigator.pop(context); // Close the dialog
+                    },
+                    icon: const Icon(Icons.delete),
+                    label: const Text('Delete'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // Helper to format the elapsed time into MM:SS
+  String _formatElapsedTime(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return '$minutes:$seconds';
   }
 
   @override
@@ -330,24 +422,26 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         children: [
           Column(
             children: <Widget>[
-              Expanded(
-                child: ListView.builder(
-                  // reverse: true,
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _messages.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    // int actualIndex = _messages.length - index - 1;
-                    final audioController = PlayerController();
-                    audioControllers.add(audioController);
-                    return MessageWidget(
-                      message: _messages[index],
-                      currentUserId: widget.userId,
-                      audioController: audioControllers[index],
-                    );
-                  },
-                ),
-              ),
+              _messages.isEmpty
+                  ? Expanded(child: Center(child: Text('Start a chat with ${widget.otherUserName}')))
+                  : Expanded(
+                      child: ListView.builder(
+                        // reverse: true,
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(8),
+                        itemCount: _messages.length,
+                        itemBuilder: (BuildContext context, int index) {
+                          // int actualIndex = _messages.length - index - 1;
+                          final audioController = PlayerController();
+                          audioControllers.add(audioController);
+                          return MessageWidget(
+                            message: _messages[index],
+                            currentUserId: widget.userId,
+                            audioController: audioControllers[index],
+                          );
+                        },
+                      ),
+                    ),
               //typing indicator
               if (_typingUserId != null)
                 Padding(
@@ -371,7 +465,26 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   child: Row(
                     children: <Widget>[
                       _isRecording
-                          ? _audioRecorderManager.buildWaveform(context)
+                          ? Expanded(
+                              child: Row(
+                                children: [
+                                  // Audio waveform covers 2/3 of the space
+                                  Expanded(
+                                    flex: 4, // Flex set to 2 for 2/3 of the width
+                                    child: _audioRecorderManager.buildWaveform(context), // Audio waveform
+                                  ),
+                                  const SizedBox(width: 10),
+                                  // Timer covers 1/3 of the space
+                                  Expanded(
+                                    flex: 1, // Flex set to 1 for 1/3 of the width
+                                    child: Text(
+                                      _formatElapsedTime(_elapsedTime),
+                                      style: const TextStyle(color: Colors.white),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
                           : Expanded(
                               child: TextField(
                                 controller: _messageInputCtrl,
@@ -387,22 +500,20 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       const SizedBox(width: 5),
                       _isTextMessageComposing
                           ? const SizedBox()
-                          : FloatingActionButton.small(
+                          : IconButton(
                               onPressed: () => _sendMedia('image'),
-                              elevation: 0,
-                              child: const Icon(
+                              icon: Icon(
                                 Icons.camera_alt,
-                                color: Colors.white,
+                                color: Colors.pink[100],
                                 size: 20,
                               ),
                             ),
                       const SizedBox(width: 5),
                       !_isTextMessageComposing
                           ? const SizedBox()
-                          : FloatingActionButton.small(
+                          : IconButton(
                               onPressed: () => _sendMedia('text'),
-                              elevation: 0,
-                              child: const Icon(
+                              icon: const Icon(
                                 Icons.send,
                                 color: Colors.white,
                                 size: 20,
@@ -415,7 +526,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               icon: Icon(
                                 _isRecording ? Icons.stop : Icons.mic,
                               ),
-                              color: Colors.black,
+                              color: Colors.yellow,
                               iconSize: 28,
                             ),
                     ],

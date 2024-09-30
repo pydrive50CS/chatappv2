@@ -53,10 +53,10 @@ class WSManager {
           log('${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
           String imageFilePath = await _getImageFilePath(data['text']);
           log(imageFilePath);
-          onMessageReceived(data['id'], data['sender'], imageFilePath, data['messageType']);
+          onMessageReceived(data['id'], data['sender'], imageFilePath, data['messageType'], data['timeStamp']);
         } else {
           log('${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
-          onMessageReceived(data['id'], data['sender'], data['text'], data['messageType']);
+          onMessageReceived(data['id'], data['sender'], data['text'], data['messageType'], data['timeStamp']);
         }
       } else if (data['type'] == 'typing' && data['roomId'] == _roomId) {
         onTyping(data['sender']);

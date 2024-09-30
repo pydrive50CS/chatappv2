@@ -56,7 +56,7 @@ function leaveRoom(roomId, ws, userId) {
 }
 
 wss.on("connection", (ws) => {
-    console.log('Attempt to join has been made');
+  console.log("Attempt to join has been made");
   let userId;
   let roomId;
   ws.on("message", (message) => {
@@ -80,6 +80,7 @@ wss.on("connection", (ws) => {
         text: data.text,
         roomId: roomId,
         messageType: data.messageType,
+        timeStamp: new Date().toISOString(),
       };
       sendToRoom(roomId, messageData); // Send message to everyone in the room
 
