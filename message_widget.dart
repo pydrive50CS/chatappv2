@@ -1,7 +1,5 @@
-
 import 'dart:io';
 
-import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:web_socket/models/chat_model.dart';
@@ -12,13 +10,13 @@ import 'package:web_socket/widgets/message_status_icon.dart';
 class MessageWidget extends StatelessWidget {
   final ChatMessage message;
   final String currentUserId;
-  final PlayerController? audioController;
+  // final PlayerController? audioController;
 
   const MessageWidget({
     super.key,
     required this.message,
     required this.currentUserId,
-    this.audioController,
+    // this.audioController,
   });
 
   @override
@@ -27,13 +25,16 @@ class MessageWidget extends StatelessWidget {
     return Column(
       crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          isMe ? MessageStatusIcon(messageStatus: message.status) : const SizedBox.shrink(),
-          const SizedBox(width: 10),
-          if (message.type == 'text') _buildTextMessage(isMe),
-          if (message.type == 'image') _buildImageMessage(context, isMe),
-          if (message.type == 'audio') _buildAudioMessage(isMe),
-        ],),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            isMe ? MessageStatusIcon(messageStatus: message.status) : const SizedBox.shrink(),
+            const SizedBox(width: 10),
+            if (message.type == 'text') _buildTextMessage(isMe),
+            if (message.type == 'image') _buildImageMessage(context, isMe),
+            if (message.type == 'audio') _buildAudioMessage(isMe),
+          ],
+        ),
         const SizedBox(height: 4),
         Padding(
           padding: const EdgeInsets.only(left: 8.0, right: 8.0),
@@ -81,6 +82,9 @@ class MessageWidget extends StatelessWidget {
   }
 
   Widget _buildAudioMessage(bool isMe) {
-    return WaveBubble(audioBytes: message.content, audioController: audioController!);
+    return WaveBubble(
+      source: message.content,
+      audioController: message.playerController!,
+    );
   }
 }

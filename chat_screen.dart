@@ -29,7 +29,6 @@ class ChatScreen extends StatefulWidget {
 }
 
 class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
-  final List<PlayerController> audioControllers = [];
   final TextEditingController _messageInputCtrl = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
@@ -84,9 +83,6 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _scrollController.removeListener(_handleScroll);
     _debounceTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    for (var controller in audioControllers) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -188,6 +184,17 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         type: type,
         status: 'sending',
       );
+    } else if (type == 'audio') {
+      final path = await _wsManager.saveMessageToTempDirectory(type, content);
+      final audioController = PlayerController();
+      newMessage = ChatMessage(
+        id: messageId,
+        sender: widget.userId,
+        content: path,
+        type: type,
+        status: 'sending',
+        playerController: audioController,
+      );
     } else {
       newMessage = ChatMessage(
         id: messageId,
@@ -201,7 +208,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _messages.add(newMessage);
       _isTextMessageComposing = false;
     });
-    log('$type,$content');
+    log('Sending Message from Chat Screen: $type,$content');
     _wsManager.sendMessage(type, messageId, content);
   }
 
@@ -295,7 +302,6 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           recordedStringBytes = result;
         });
         _showAudioOptionsDialog(recordedStringBytes);
-        // _sendMedia('audio', audioBytes: recordedStringBytes);
       }
     } else {
       // Start recording
@@ -349,7 +355,11 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 'Audio recorded',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              WaveBubble(audioBytes: audioBytes ?? '', audioController: audioController),
+              WaveBubble(
+                source: audioBytes ?? '',
+                audioController: audioController,
+                isBytes: true,
+              ),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -432,12 +442,9 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         itemCount: _messages.length,
                         itemBuilder: (BuildContext context, int index) {
                           // int actualIndex = _messages.length - index - 1;
-                          final audioController = PlayerController();
-                          audioControllers.add(audioController);
                           return MessageWidget(
                             message: _messages[index],
                             currentUserId: widget.userId,
-                            audioController: audioControllers[index],
                           );
                         },
                       ),
@@ -459,7 +466,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 alignment: Alignment.bottomCenter,
                 child: Row(
                   children: <Widget>[
-// Only the TextField and audio waveform are inside the decorated container
+                    // Only the TextField and audio waveform are inside the decorated container
                     Expanded(
                       child: Container(
                         margin: const EdgeInsets.all(8),
@@ -492,7 +499,9 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                     flex: 1,
                                     child: Text(
                                       _formatElapsedTime(_elapsedTime),
-                                      style: const TextStyle(color: Colors.black), // Black text for timer
+                                      style: const TextStyle(
+                                        color: Colors.black,
+                                      ), // Black text for timer
                                     ),
                                   ),
                                 ],

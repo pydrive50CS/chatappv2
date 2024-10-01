@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'package:audio_waveforms/audio_waveforms.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -15,7 +16,7 @@ class WSManager {
   final int _maxReconnectAttempts = 5;
   int _reconnectAttempts = 0;
   Function? onMaxReconnectReached;
-  static final Map<String, String> _imageCache = {};
+  static final Map<String, String> _messageCache = {};
   WSManager({required String userId, required String otherUserId, required String roomId}) {
     _userId = userId;
     _otherUserId = otherUserId;
@@ -49,13 +50,28 @@ class WSManager {
       log('Received message: $message');
 
       if (data['type'] == 'message' && data['roomId'] == _roomId) {
+        //image message
         if (data['messageType'] == 'image' && _userId != data['sender']) {
-          log('${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
-          String imageFilePath = await _getImageFilePath(data['text']);
+          log('Image file from server: ${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
+          String imageFilePath = await getTempFilePath(data['messageType'], data['text']);
           log(imageFilePath);
           onMessageReceived(data['id'], data['sender'], imageFilePath, data['messageType'], data['timeStamp']);
-        } else {
+        }
+        // audio message
+        else if (data['messageType'] == 'audio' && _userId != data['sender']) {
+          final audioController = PlayerController();
+          log('Audio File from server:${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
+          String audioFilePath = await getTempFilePath(data['messageType'], data['text']);
+          log(audioFilePath);
+          onMessageReceived(data['id'], data['sender'], audioFilePath, data['messageType'], data['timeStamp'], audioController);
+        }
+        //text message
+        else if (data['messageType'] == 'text' && _userId != data['sender']) {
           log('${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
+          onMessageReceived(data['id'], data['sender'], data['text'], data['messageType'], data['timeStamp']);
+        }
+        //handle timestamp if sender is current user
+        else {
           onMessageReceived(data['id'], data['sender'], data['text'], data['messageType'], data['timeStamp']);
         }
       } else if (data['type'] == 'typing' && data['roomId'] == _roomId) {
@@ -148,30 +164,41 @@ class WSManager {
     }
   }
 
-  Future<String> _getImageFilePath(String base64Image) async {
+  Future<String> getTempFilePath(String type, String base64Message) async {
     // Check if image is already cached
-    if (_imageCache.containsKey(base64Image)) {
-      return _imageCache[base64Image]!;
+    if (_messageCache.containsKey(base64Message)) {
+      return _messageCache[base64Message]!;
     }
 
     // Save image to the temp directory and cache the path
-    final filePath = await saveImageToTempDirectory(base64Image);
-    _imageCache[base64Image] = filePath;
+    final filePath = await saveMessageToTempDirectory(type, base64Message);
+    _messageCache[base64Message] = filePath;
 
     return filePath;
   }
 
-  Future<String> saveImageToTempDirectory(String base64Image) async {
+  Future<String> saveMessageToTempDirectory(String type, String base64Message) async {
     try {
-      final tempDir = await getTemporaryDirectory();
-      final filePath = '${tempDir.path}/image_${DateTime.now().millisecondsSinceEpoch}.png';
-      final file = File(filePath);
-      await file.writeAsBytes(base64Decode(base64Image));
-      log('Image saved to: $filePath');
-      return filePath;
-    } catch (e) {
-      log('Error saving image: $e');
-      throw Exception('Failed to save image');
+      if (type == 'image') {
+        final tempDir = await getTemporaryDirectory();
+        final filePath = '${tempDir.path}/image_${DateTime.now().millisecondsSinceEpoch}.png';
+        final file = File(filePath);
+        await file.writeAsBytes(base64Decode(base64Message));
+        log('Image saved to: $filePath');
+        return filePath;
+      } else if (type == 'audio') {
+        final tempDir = await getTemporaryDirectory();
+        final filePath = '${tempDir.path}/audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        final file = File(filePath);
+        await file.writeAsBytes(base64Decode(base64Message));
+        log('Audio saved to: $filePath');
+        return filePath;
+      } else {
+        return 'Empty File Path';
+      }
+    } catch (e, st) {
+      log('Error saving message: $e,$st');
+      throw Exception('Failed to save message');
     }
   }
 

@@ -8,13 +8,15 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 class WaveBubble extends StatefulWidget {
-  final String audioBytes;
+  final String source;
   final PlayerController audioController;
+  final bool isBytes;
 
   const WaveBubble({
     super.key,
-    required this.audioBytes,
+    required this.source,
     required this.audioController,
+    this.isBytes = false,
   });
 
   @override
@@ -43,20 +45,25 @@ class _WaveBubbleState extends State<WaveBubble> {
 
   Future<void> _saveAndPreparePlayer() async {
     try {
-      final uniqueFileName = "${const Uuid().v4()}.m4a";
-      final tempDir = await getTemporaryDirectory();
-      tempAudioFilePath = "${tempDir.path}/$uniqueFileName";
-      // tempAudioFilePath = "${tempDir.path}/temp_audio.m4a";
-      // Decode the audio bytes and write them to a temporary file
-      final file = File(tempAudioFilePath!); // Safely unwrap the nullable variable
-      await file.writeAsBytes(base64.decode(widget.audioBytes)); // Convert to bytes
-      // setState(() {});
-      // Prepare player with the temp file
-      await widget.audioController.preparePlayer(
-        path: tempAudioFilePath!,
-        shouldExtractWaveform: true,
-        noOfSamples: 30,
-      );
+      if (widget.isBytes) {
+        final uniqueFileName = "${const Uuid().v4()}.m4a";
+        final tempDir = await getTemporaryDirectory();
+        tempAudioFilePath = "${tempDir.path}/$uniqueFileName";
+        // Decode the audio bytes and write them to a temporary file
+        final file = File(tempAudioFilePath!); // Safely unwrap the nullable variable
+        await file.writeAsBytes(base64.decode(widget.source)); // Convert to bytes
+        await widget.audioController.preparePlayer(
+          path: tempAudioFilePath!,
+          shouldExtractWaveform: true,
+          noOfSamples: 30,
+        );
+      } else {
+        await widget.audioController.preparePlayer(
+          path: widget.source,
+          shouldExtractWaveform: true,
+          noOfSamples: 30,
+        );
+      }
     } catch (e) {
       debugPrint('Error saving audio file: $e');
       tempAudioFilePath = null; // Set to null if there's an error
@@ -71,53 +78,51 @@ class _WaveBubbleState extends State<WaveBubble> {
 
   @override
   Widget build(BuildContext context) {
-    return tempAudioFilePath != null
-        ? Container(
-            padding: const EdgeInsets.only(
-              bottom: 6,
-              top: 6,
-            ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              gradient: const LinearGradient(
-                colors: [
-                  Colors.blue,
-                  Color.fromARGB(255, 253, 3, 48),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+    return Container(
+      padding: const EdgeInsets.only(
+        bottom: 6,
+        top: 6,
+      ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        gradient: const LinearGradient(
+          colors: [
+            Colors.blue,
+            Color.fromARGB(255, 253, 3, 48),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!widget.audioController.playerState.isStopped)
+            IconButton(
+              onPressed: () async {
+                widget.audioController.playerState.isPlaying
+                    ? await widget.audioController.pausePlayer()
+                    : await widget.audioController.startPlayer(
+                        finishMode: FinishMode.pause,
+                      );
+              },
+              icon: Icon(
+                widget.audioController.playerState.isPlaying ? Icons.stop : Icons.play_arrow,
               ),
+              color: Colors.white,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!widget.audioController.playerState.isStopped)
-                  IconButton(
-                    onPressed: () async {
-                      widget.audioController.playerState.isPlaying
-                          ? await widget.audioController.pausePlayer()
-                          : await widget.audioController.startPlayer(
-                              finishMode: FinishMode.pause,
-                            );
-                    },
-                    icon: Icon(
-                      widget.audioController.playerState.isPlaying ? Icons.stop : Icons.play_arrow,
-                    ),
-                    color: Colors.white,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                  ),
-                AudioFileWaveforms(
-                  size: Size(MediaQuery.of(context).size.width / 2, 40),
-                  playerController: widget.audioController,
-                  // waveformType: widget.index?.isOdd ?? false ? WaveformType.fitWidth : WaveformType.long,
-                  waveformType: WaveformType.fitWidth,
-                  playerWaveStyle: playerWaveStyle,
-                ),
-                const SizedBox(width: 10),
-              ],
-            ),
-          )
-        : const SizedBox.shrink();
+          AudioFileWaveforms(
+            size: Size(MediaQuery.of(context).size.width / 2, 40),
+            playerController: widget.audioController,
+            // waveformType: widget.index?.isOdd ?? false ? WaveformType.fitWidth : WaveformType.long,
+            waveformType: WaveformType.fitWidth,
+            playerWaveStyle: playerWaveStyle,
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+    );
   }
 }
