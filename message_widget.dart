@@ -1,3 +1,4 @@
+
 import 'dart:io';
 
 import 'package:audio_waveforms/audio_waveforms.dart';
@@ -27,17 +28,15 @@ class MessageWidget extends StatelessWidget {
       crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         Row(mainAxisSize: MainAxisSize.min, children: [
+          isMe ? MessageStatusIcon(messageStatus: message.status) : const SizedBox.shrink(),
+          const SizedBox(width: 10),
           if (message.type == 'text') _buildTextMessage(isMe),
           if (message.type == 'image') _buildImageMessage(context, isMe),
           if (message.type == 'audio') _buildAudioMessage(isMe),
-          const SizedBox(
-            width: 10,
-          ),
-          isMe ? MessageStatusIcon(messageStatus: message.status) : const SizedBox.shrink(),
-        ]),
+        ],),
         const SizedBox(height: 4),
         Padding(
-          padding: const EdgeInsets.only(left: 8.0, right: 24.0),
+          padding: const EdgeInsets.only(left: 8.0, right: 8.0),
           child: Text(
             DateFormat.jm().format(DateTime.parse(message.timeStamp ?? DateTime.now().toString()).toLocal()),
             style: const TextStyle(color: Colors.grey, fontSize: 8),

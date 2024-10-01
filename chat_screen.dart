@@ -425,23 +425,23 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               _messages.isEmpty
                   ? Expanded(child: Center(child: Text('Start a chat with ${widget.otherUserName}')))
                   : Expanded(
-                      child: ListView.builder(
-                        // reverse: true,
-                        controller: _scrollController,
-                        padding: const EdgeInsets.all(8),
-                        itemCount: _messages.length,
-                        itemBuilder: (BuildContext context, int index) {
-                          // int actualIndex = _messages.length - index - 1;
-                          final audioController = PlayerController();
-                          audioControllers.add(audioController);
-                          return MessageWidget(
-                            message: _messages[index],
-                            currentUserId: widget.userId,
-                            audioController: audioControllers[index],
-                          );
-                        },
-                      ),
-                    ),
+                child: ListView.builder(
+                  // reverse: true,
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(8),
+                  itemCount: _messages.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    // int actualIndex = _messages.length - index - 1;
+                    final audioController = PlayerController();
+                    audioControllers.add(audioController);
+                    return MessageWidget(
+                      message: _messages[index],
+                      currentUserId: widget.userId,
+                      audioController: audioControllers[index],
+                    );
+                  },
+                ),
+              ),
               //typing indicator
               if (_typingUserId != null)
                 Padding(
@@ -466,69 +466,69 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     children: <Widget>[
                       _isRecording
                           ? Expanded(
-                              child: Row(
-                                children: [
-                                  // Audio waveform covers 2/3 of the space
-                                  Expanded(
-                                    flex: 4, // Flex set to 2 for 2/3 of the width
-                                    child: _audioRecorderManager.buildWaveform(context), // Audio waveform
-                                  ),
-                                  const SizedBox(width: 10),
-                                  // Timer covers 1/3 of the space
-                                  Expanded(
-                                    flex: 1, // Flex set to 1 for 1/3 of the width
-                                    child: Text(
-                                      _formatElapsedTime(_elapsedTime),
-                                      style: const TextStyle(color: Colors.white),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : Expanded(
-                              child: TextField(
-                                controller: _messageInputCtrl,
-                                decoration: const InputDecoration(
-                                  hintText: 'Write message...',
-                                  border: InputBorder.none,
-                                ),
-                                keyboardType: TextInputType.multiline,
-                                textInputAction: TextInputAction.newline,
-                                onChanged: _onTextChanged,
+                        child: Row(
+                          children: [
+                            // Audio waveform covers 2/3 of the space
+                            Expanded(
+                              flex: 4, // Flex set to 2 for 2/3 of the width
+                              child: _audioRecorderManager.buildWaveform(context), // Audio waveform
+                            ),
+                            const SizedBox(width: 10),
+                            // Timer covers 1/3 of the space
+                            Expanded(
+                              flex: 1, // Flex set to 1 for 1/3 of the width
+                              child: Text(
+                                _formatElapsedTime(_elapsedTime),
+                                style: const TextStyle(color: Colors.white),
                               ),
                             ),
+                          ],
+                        ),
+                      )
+                          : Expanded(
+                        child: TextField(
+                          controller: _messageInputCtrl,
+                          decoration: const InputDecoration(
+                            hintText: 'Write message...',
+                            border: InputBorder.none,
+                          ),
+                          keyboardType: TextInputType.multiline,
+                          textInputAction: TextInputAction.newline,
+                          onChanged: _onTextChanged,
+                        ),
+                      ),
                       const SizedBox(width: 5),
                       _isTextMessageComposing
                           ? const SizedBox()
                           : IconButton(
-                              onPressed: () => _sendMedia('image'),
-                              icon: Icon(
-                                Icons.camera_alt,
-                                color: Colors.pink[100],
-                                size: 20,
-                              ),
-                            ),
+                        onPressed: () => _sendMedia('image'),
+                        icon: Icon(
+                          Icons.camera_alt,
+                          color: Colors.pink[100],
+                          size: 20,
+                        ),
+                      ),
                       const SizedBox(width: 5),
                       !_isTextMessageComposing
                           ? const SizedBox()
                           : IconButton(
-                              onPressed: () => _sendMedia('text'),
-                              icon: const Icon(
-                                Icons.send,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
+                        onPressed: () => _sendMedia('text'),
+                        icon: const Icon(
+                          Icons.send,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
                       _isTextMessageComposing
                           ? const SizedBox()
                           : IconButton(
-                              onPressed: _startOrStopRecording,
-                              icon: Icon(
-                                _isRecording ? Icons.stop : Icons.mic,
-                              ),
-                              color: Colors.yellow,
-                              iconSize: 28,
-                            ),
+                        onPressed: _startOrStopRecording,
+                        icon: Icon(
+                          _isRecording ? Icons.stop : Icons.mic,
+                        ),
+                        color: Colors.yellow,
+                        iconSize: 28,
+                      ),
                     ],
                   ),
                 ),

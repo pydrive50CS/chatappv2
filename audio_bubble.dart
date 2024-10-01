@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -73,46 +74,44 @@ class _WaveBubbleState extends State<WaveBubble> {
   Widget build(BuildContext context) {
     return tempAudioFilePath != null
         ? Container(
-            padding: const EdgeInsets.only(
-              bottom: 6,
-              right: 10,
-              top: 6,
+      padding: const EdgeInsets.only(
+        bottom: 6,
+        top: 6,
+      ),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFF276bfd),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!widget.audioController.playerState.isStopped)
+            IconButton(
+              onPressed: () async {
+                widget.audioController.playerState.isPlaying
+                    ? await widget.audioController.pausePlayer()
+                    : await widget.audioController.startPlayer(
+                  finishMode: FinishMode.pause,
+                );
+              },
+              icon: Icon(
+                widget.audioController.playerState.isPlaying ? Icons.stop : Icons.play_arrow,
+              ),
+              color: Colors.white,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
             ),
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              color: const Color(0xFF276bfd),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!widget.audioController.playerState.isStopped)
-                  IconButton(
-                    onPressed: () async {
-                      widget.audioController.playerState.isPlaying
-                          ? await widget.audioController.pausePlayer()
-                          : await widget.audioController.startPlayer(
-                              finishMode: FinishMode.pause,
-                            );
-                    },
-                    icon: Icon(
-                      widget.audioController.playerState.isPlaying ? Icons.stop : Icons.play_arrow,
-                    ),
-                    color: Colors.white,
-                    splashColor: Colors.transparent,
-                    highlightColor: Colors.transparent,
-                  ),
-                AudioFileWaveforms(
-                  size: Size(MediaQuery.of(context).size.width / 2, 40),
-                  playerController: widget.audioController,
-                  // waveformType: widget.index?.isOdd ?? false ? WaveformType.fitWidth : WaveformType.long,
-                  waveformType: WaveformType.fitWidth,
-                  playerWaveStyle: playerWaveStyle,
-                ),
-                const SizedBox(width: 10),
-              ],
-            ),
-          )
+          AudioFileWaveforms(
+            size: Size(MediaQuery.of(context).size.width / 2, 40),
+            playerController: widget.audioController,
+            // waveformType: widget.index?.isOdd ?? false ? WaveformType.fitWidth : WaveformType.long,
+            waveformType: WaveformType.fitWidth,
+            playerWaveStyle: playerWaveStyle,
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+    )
         : const SizedBox.shrink();
   }
 }
