@@ -52,6 +52,7 @@ class WSManager {
       if (data['type'] == 'message' && data['roomId'] == _roomId) {
         //image message
         if (data['messageType'] == 'image' && _userId != data['sender']) {
+          log('ImageMessage from server');
           log('Image file from server: ${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
           String imageFilePath = await getTempFilePath(data['messageType'], data['text']);
           log(imageFilePath);
@@ -59,19 +60,22 @@ class WSManager {
         }
         // audio message
         else if (data['messageType'] == 'audio' && _userId != data['sender']) {
+          log('AudioMessage from server');
           final audioController = PlayerController();
           log('Audio File from server:${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
           String audioFilePath = await getTempFilePath(data['messageType'], data['text']);
           log(audioFilePath);
-          onMessageReceived(data['id'], data['sender'], audioFilePath, data['messageType'], data['timeStamp'], audioController);
+          onMessageReceived(data['id'], data['sender'], audioFilePath, data['messageType'], data['timeStamp'], playerController: audioController);
         }
         //text message
         else if (data['messageType'] == 'text' && _userId != data['sender']) {
+          log('TextMessage from server');
           log('${data['type']}, ${data['sender']}, ${data['text']}, ${data['messageType']}');
           onMessageReceived(data['id'], data['sender'], data['text'], data['messageType'], data['timeStamp']);
         }
         //handle timestamp if sender is current user
         else {
+          log('Message from server same user');
           onMessageReceived(data['id'], data['sender'], data['text'], data['messageType'], data['timeStamp']);
         }
       } else if (data['type'] == 'typing' && data['roomId'] == _roomId) {

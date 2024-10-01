@@ -118,7 +118,7 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _onMessageReceived(String id, String sender, String message, String type, String timeStamp) {
+  void _onMessageReceived(String id, String sender, String message, String type, String timeStamp, {PlayerController? playerController}) {
     setState(() {
       // Update status if the message was sent by the current user
       if (sender == widget.userId) {
@@ -129,11 +129,12 @@ class ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         }
       } else {
         _messages.add(ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          id: id,
           sender: sender,
           content: message,
           type: type,
           timeStamp: timeStamp,
+          playerController: type == 'audio' ? playerController : null,
         ));
         _typingUserId = null;
       }
